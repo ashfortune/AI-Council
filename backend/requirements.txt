@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+google-genai
+langchain-google-genai
+langchain-ollama
+langgraph
+langchain-core
+langchain-postgres
+psycopg2-binary
+httpx
