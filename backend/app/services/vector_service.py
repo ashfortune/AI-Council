@@ -10,12 +10,12 @@ class VectorService:
             model="llama3.2:3b",
             base_url=settings.OLLAMA_BASE_URL
         )
-        self.connection_string = settings.DATABASE_URL
+        self.connection_string = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
         self.collection_name = "decision_criteria"
         
         # PGVector 초기화 (테이블 자동 생성 지원)
         try:
-            # 확장 기능 활성화 확인 (최초 1회 필요할 수 있음)
+            # 확장 기능 활성화 확인 (psycopg2 사용)
             import psycopg2
             conn = psycopg2.connect(self.connection_string)
             cur = conn.cursor()

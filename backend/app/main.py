@@ -1,6 +1,11 @@
-import uvicorn
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
+
+# .env 파일 로드
+load_dotenv()
 from app.api.v1 import debate
 from app.core.config import settings
 

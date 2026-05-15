@@ -7,7 +7,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage] = Field(..., description="대화 내역")
-    model: Optional[str] = Field("gemini-1.5-flash", description="사용할 LLM 모델")
+    model: Optional[str] = Field("gemini-2.0-flash", description="사용할 LLM 모델")
     temperature: Optional[float] = Field(0.7, description="창의성 조절")
 
 class ChatResponse(BaseModel):

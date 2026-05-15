@@ -5,17 +5,25 @@ import { Send, Bot, User, Sparkles, Plus, MessageSquare, Shield, TrendingUp, Cpu
 
 interface Message {
   id: string;
-  role: 'agent_a' | 'agent_b' | 'moderator' | 'user';
+  role: 'agent_a' | 'agent_b' | 'moderator' | 'user' | 'summarize';
   name: string;
   content: string;
-  isStreaming?: boolean;
+  isStreaming: boolean;
+  isThinking?: boolean;
+  turn?: number;
 }
 
+const TypingDots = () => (
+  <div className="flex space-x-1 items-center h-5">
+    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+    <div className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+  </div>
+);
+
 const AVAILABLE_MODELS = [
-  { id: 'llama3.2:3b', name: 'Llama 3.2 (3B)', provider: 'Ollama' },
-  { id: 'llama3.1:8b', name: 'Llama 3.1 (8B)', provider: 'Ollama' },
-  { id: 'gemma2:latest', name: 'Gemma 2 (Latest)', provider: 'Ollama' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google' },
+  { id: 'gemma-4-26b-it', name: 'Gemma 4 26B' },
+  { id: 'gemma-4-31b-it', name: 'Gemma 4 31B' },
 ];
 
 export default function AICouncilApp() {
@@ -24,14 +32,15 @@ export default function AICouncilApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStarted, setIsStarted] = useState(false);
   
-  const [businessModel, setBusinessModel] = useState('llama3.1:8b');
-  const [techModel, setTechModel] = useState('llama3.1:8b');
-  const [businessName, setBusinessName] = useState('Agent A');
-  const [businessInstruction, setBusinessInstruction] = useState('당신은 수익성과 시장성을 분석하는 제안자입니다.');
-  const [techName, setTechName] = useState('Agent B');
-  const [techInstruction, setTechInstruction] = useState('당신은 기술적 실현 가능성을 분석하는 비판자입니다.');
+  const [businessModel, setBusinessModel] = useState('gemma-4-31b-it');
+  const [techModel, setTechModel] = useState('gemma-4-31b-it');
+  const [businessName, setBusinessName] = useState('재복');
+  const [businessInstruction, setBusinessInstruction] = useState('당신은 재복. 당신은 남자친구입니다. 여자친구인 지영과 저녁 메뉴에 대해 토론하며 무조건 비즈니스 전략적인 태도로 논리적으로 자신의 메뉴를 방어하고 상대방의 논리적 허점을 공격하세요. 2~3문장으로 간결하게 답변하세요. 한국어로만 답변하세요.');
+  const [techName, setTechName] = useState('기술자 B');
+  const [techInstruction, setTechInstruction] = useState('당신은 기술적 실현 가능성과 리스크를 분석하는 비판자입니다.');
   
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<string | null>(null);
+  const [activeNode, setActiveNode] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -40,7 +49,7 @@ export default function AICouncilApp() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, status]);
+  }, [messages, status, activeNode]);
 
   const handleDebate = async () => {
     if (!input.trim() || isLoading) return;
@@ -77,8 +86,8 @@ export default function AICouncilApp() {
           const { done, value } = await reader.read();
           if (done) break;
           
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
+          const chunkStr = decoder.decode(value);
+          const lines = chunkStr.split('\n');
           
           for (const line of lines) {
             if (!line.trim()) continue;
@@ -87,52 +96,72 @@ export default function AICouncilApp() {
               
               if (data.type === 'status') {
                 setStatus(data.content);
+                setActiveNode(data.node);
+                // 노드 시작 시 빈 말풍선을 미리 만들지 않음 (유령 말풍선 방지)
               } else if (data.type === 'chunk') {
                 setMessages(prev => {
-                  const lastMsg = prev[prev.length - 1];
-                  if (lastMsg && lastMsg.role === data.node && lastMsg.isStreaming) {
-                    return [
-                      ...prev.slice(0, -1),
-                      { ...lastMsg, content: lastMsg.content + data.content }
-                    ];
-                  } else {
+                  const targetId = `turn-${data.turn}-${data.node}`;
+                  const targetIdx = prev.findLastIndex(m => m.id === targetId);
+                  
+                  if (targetIdx === -1) {
                     return [
                       ...prev,
                       { 
-                        id: Math.random().toString(), 
+                        id: targetId, 
                         role: data.node, 
                         name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName), 
                         content: data.content,
-                        isStreaming: true 
+                        isStreaming: true,
+                        isThinking: false,
+                        turn: data.turn
                       }
                     ];
                   }
+
+                  const newMessages = [...prev];
+                  newMessages[targetIdx] = {
+                    ...newMessages[targetIdx],
+                    content: newMessages[targetIdx].content + data.content,
+                    isThinking: false
+                  };
+                  return newMessages;
                 });
               } else if (data.type === 'node_done') {
                 setMessages(prev => {
-                  const lastMsg = prev[prev.length - 1];
-                  if (lastMsg && lastMsg.role === data.node) {
-                    return [
-                      ...prev.slice(0, -1),
-                      { ...lastMsg, content: data.content, isStreaming: false }
-                    ];
+                  const targetId = `turn-${data.turn}-${data.node}`;
+                  const targetIdx = prev.findLastIndex(m => m.id === targetId);
+                  
+                  // 모든 메시지의 스트리밍 상태 종료
+                  const baseMessages = prev.map((m: Message) => ({ ...m, isStreaming: false, isThinking: false }));
+
+                  if (targetIdx !== -1) {
+                    const newMessages = [...baseMessages];
+                    newMessages[targetIdx] = { 
+                      ...newMessages[targetIdx],
+                      content: data.content,
+                      isStreaming: false,
+                      isThinking: false
+                    };
+                    return newMessages;
                   } else {
-                    // 이전에 chunk가 없었을 경우 새로 추가
+                    // 메시지가 없었다면 새로 생성
                     return [
-                      ...prev,
-                      { 
-                        id: Math.random().toString(), 
-                        role: data.node as any, 
-                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName), 
+                      ...baseMessages,
+                      {
+                        id: targetId,
+                        role: data.node as any,
+                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName),
                         content: data.content,
-                        isStreaming: false 
+                        isStreaming: false,
+                        isThinking: false,
+                        turn: data.turn
                       }
                     ];
                   }
                 });
               }
             } catch (e) {
-              // Partial JSON handling
+              console.error("Parse error:", e, line);
             }
           }
         }
@@ -141,13 +170,13 @@ export default function AICouncilApp() {
       alert('오류 발생: ' + error);
     } finally {
       setIsLoading(false);
-      setStatus('토론 종료');
+      setStatus(null);
+      setActiveNode(null);
     }
   };
 
   return (
     <main className="flex h-screen bg-[#0f172a] text-white font-sans overflow-hidden">
-      {/* Sidebar */}
       <aside className="w-80 bg-[#1e293b]/50 backdrop-blur-xl border-r border-white/10 flex flex-col p-6 overflow-y-auto">
         <div className="flex items-center gap-3 mb-10">
           <Sparkles className="text-violet-500" size={28} />
@@ -225,7 +254,6 @@ export default function AICouncilApp() {
         </div>
       </aside>
 
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative">
         <header className="px-10 py-6 border-b border-white/10 flex justify-between items-center backdrop-blur-md z-10">
           <div>
@@ -245,33 +273,39 @@ export default function AICouncilApp() {
             </div>
           )}
 
-          {messages.filter(msg => msg.content && msg.content.trim() !== '').map((msg) => (
+          {messages.map((msg) => (
             <div 
               key={msg.id} 
               className={`flex flex-col ${
                 msg.role === 'summarize' 
                   ? 'items-center' 
                   : (msg.role === 'agent_a' ? 'items-start' : 'items-end')
-              } animate-fade-in`}
+              } animate-fade-in mb-6`}
             >
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <span className={`text-[11px] font-black uppercase tracking-wider ${
-                  msg.role === 'summarize' ? 'text-amber-400' : 'text-white/40'
+              <div className="flex flex-col max-w-[80%]">
+                <span className={`text-[11px] font-medium mb-1.5 px-1 opacity-50 ${
+                  msg.role === 'agent_b' ? 'text-right' : ''
                 }`}>
                   {msg.name}
                 </span>
-                {msg.isStreaming && <Loader2 size={10} className="animate-spin text-violet-500" />}
-              </div>
-              <div 
-                className={`max-w-[80%] p-6 rounded-2xl leading-relaxed text-sm shadow-2xl transition-all ${
+                <div className={`relative px-4 py-3 rounded-2xl shadow-lg transition-all duration-300 ${
                   msg.role === 'summarize'
-                    ? 'bg-gradient-to-br from-amber-900/40 to-yellow-900/40 border-2 border-amber-500/50 text-amber-50'
+                    ? 'bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/30 text-amber-100 text-center backdrop-blur-md'
                     : (msg.role === 'agent_a' 
-                        ? 'bg-slate-800 border border-white/10 rounded-bl-none' 
-                        : 'bg-violet-600 border border-violet-400/30 rounded-br-none')
-                }`}
-              >
-                {msg.content}
+                        ? 'bg-[#1e293b] border border-white/10 text-white rounded-tl-none' 
+                        : 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/20')
+                }`}>
+                  {msg.isThinking ? (
+                    <div className="flex items-center gap-3">
+                      <TypingDots />
+                      <span className="text-[11px] opacity-70">생각 중...</span>
+                    </div>
+                  ) : (
+                    <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">
+                      {msg.content}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           ))}

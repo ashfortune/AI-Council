@@ -11,3 +11,5 @@ langchain-core
 langchain-postgres
 psycopg2-binary
 httpx
+langchain-groq
+loguru
