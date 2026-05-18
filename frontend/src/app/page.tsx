@@ -66,6 +66,23 @@ export default function AICouncilApp() {
     setActiveNode(null);
   };
 
+  const handleResetAgentA = () => {
+    setBusinessModel('gemini-3.1-flash-lite');
+    setBusinessName('');
+    setBusinessInstruction('');
+  };
+
+  const handleResetAgentB = () => {
+    setTechModel('gemini-3.1-flash-lite');
+    setTechName('');
+    setTechInstruction('');
+  };
+
+  const handleResetAllSettings = () => {
+    handleResetAgentA();
+    handleResetAgentB();
+  };
+
   const handleDebate = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -220,16 +237,37 @@ export default function AICouncilApp() {
   return (
     <main className="flex h-screen bg-[#0f172a] text-white font-sans overflow-hidden">
       <aside className="w-80 bg-[#1e293b]/50 backdrop-blur-xl border-r border-white/10 flex flex-col p-6 overflow-y-auto">
-        <div className="flex items-center gap-3 mb-10">
-          <Sparkles className="text-violet-500" size={28} />
-          <h2 className="text-2xl font-black tracking-tighter">AI Council V2</h2>
+        <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center gap-3">
+            <Sparkles className="text-violet-500" size={28} />
+            <h2 className="text-2xl font-black tracking-tighter">AI Council V2</h2>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetAllSettings}
+            title="모든 에이전트 설정 초기화"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-white/60 hover:text-white transition-all shadow-sm"
+          >
+            <RotateCcw size={12} />
+            <span>설정 리셋</span>
+          </button>
         </div>
 
         <div className="space-y-6">
           <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-            <h3 className="text-sm font-bold text-white/40 mb-4 flex items-center gap-2">
-              <Settings size={14} /> Agent A
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-bold text-white/40 flex items-center gap-2">
+                <Settings size={14} /> Agent A
+              </h3>
+              <button
+                type="button"
+                onClick={handleResetAgentA}
+                title="Agent A 설정 초기화"
+                className="text-white/30 hover:text-white transition-colors p-1"
+              >
+                <RotateCcw size={12} />
+              </button>
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Model</label>
@@ -263,9 +301,19 @@ export default function AICouncilApp() {
           </div>
 
           <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-            <h3 className="text-sm font-bold text-white/40 mb-4 flex items-center gap-2">
-              <Settings size={14} /> Agent B
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-bold text-white/40 flex items-center gap-2">
+                <Settings size={14} /> Agent B
+              </h3>
+              <button
+                type="button"
+                onClick={handleResetAgentB}
+                title="Agent B 설정 초기화"
+                className="text-white/30 hover:text-white transition-colors p-1"
+              >
+                <RotateCcw size={12} />
+              </button>
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Model</label>
