@@ -22,7 +22,8 @@ const TypingDots = () => (
 );
 
 const AVAILABLE_MODELS = [
-  { id: 'gemma-4-26b-it', name: 'Gemma 4 26B' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+  { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 26B' },
   { id: 'gemma-4-31b-it', name: 'Gemma 4 31B' },
 ];
 
@@ -32,8 +33,8 @@ export default function AICouncilApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStarted, setIsStarted] = useState(false);
   
-  const [businessModel, setBusinessModel] = useState('gemma-4-31b-it');
-  const [techModel, setTechModel] = useState('gemma-4-31b-it');
+  const [businessModel, setBusinessModel] = useState('gemini-3.1-flash-lite');
+  const [techModel, setTechModel] = useState('gemini-3.1-flash-lite');
   const [businessName, setBusinessName] = useState('');
   const [businessInstruction, setBusinessInstruction] = useState('');
   const [techName, setTechName] = useState('');
@@ -97,7 +98,27 @@ export default function AICouncilApp() {
               if (data.type === 'status') {
                 setStatus(data.content);
                 setActiveNode(data.node);
-                // 노드 시작 시 빈 말풍선을 미리 만들지 않음 (유령 말풍선 방지)
+                if (data.node && ['agent_a', 'agent_b', 'summarize'].includes(data.node)) {
+                  setMessages(prev => {
+                    const targetId = `turn-${data.turn}-${data.node}`;
+                    const exists = prev.some(m => m.id === targetId);
+                    if (!exists) {
+                      return [
+                        ...prev,
+                        {
+                          id: targetId,
+                          role: data.node as any,
+                          name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')),
+                          content: '',
+                          isStreaming: true,
+                          isThinking: true,
+                          turn: data.turn
+                        }
+                      ];
+                    }
+                    return prev;
+                  });
+                }
               } else if (data.type === 'chunk') {
                 setMessages(prev => {
                   const targetId = `turn-${data.turn}-${data.node}`;
