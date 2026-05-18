@@ -24,9 +24,9 @@ pipeline {
         stage('Docker Build & Deploy to Local Host') {
             steps {
                 echo '🚀 Building images and deploying containers to local host Docker (DooD)...'
-                sh 'cp /var/jenkins_home/.env_host .env || touch .env'
-                sh 'docker compose build'
-                sh 'docker compose up -d --no-deps backend frontend'
+                sh 'cp /app/.env_host .env || touch .env'
+                sh 'docker compose -p ai-council build'
+                sh 'docker compose -p ai-council up -d --no-deps backend frontend'
                 sh 'docker image prune -f'
             }
         }
