@@ -66,10 +66,14 @@ class DebateService:
             for part in content:
                 if isinstance(part, str):
                     text_parts.append(part)
-                elif isinstance(part, dict) and "text" in part:
-                    text_parts.append(part["text"])
-            return "".join(text_parts).strip()
-        return ""
+                elif isinstance(part, dict):
+                    if "text" in part and part["text"]:
+                        text_parts.append(part["text"])
+                    elif "thinking" in part and part["thinking"]:
+                        text_parts.append(part["thinking"])
+            res = "\n\n".join(text_parts).strip()
+            return res if res else str(content).strip()
+        return str(content).strip()
 
     def _prepare_messages(self, system_prompt: str, state_messages: List[BaseMessage]) -> List[BaseMessage]:
         """Gemini API의 User-AI 교차 규칙을 준수하도록 메시지 목록을 가공"""
@@ -82,26 +86,22 @@ class DebateService:
         # 2. 역할 정규화 및 연속된 역할 통합
         normalized = []
         for m in state_messages:
-            # 역할 판별 (Human/System은 user로, 나머지는 assistant로 일단 분류)
             role = "user" if isinstance(m, (HumanMessage, SystemMessage)) else "assistant"
             content = self._extract_text(m.content)
             
             if not content: continue # 빈 메시지 스킵
             
             if normalized and normalized[-1]["role"] == role:
-                # 같은 역할이 연속되면 내용 통합
                 normalized[-1]["content"] += f"\n\n{content}"
             else:
                 normalized.append({"role": role, "content": content})
 
         # 3. 제미나이 규칙 적용: 무조건 user로 시작, user로 끝남, 중간은 user-assistant 교차
-        # 첫 번째가 assistant라면 user로 강제 변경
         if normalized and normalized[0]["role"] == "assistant":
             normalized[0]["role"] = "user"
 
         # 4. 최종 메시지 리스트 생성
         for i, entry in enumerate(normalized):
-            # 마지막 메시지는 무조건 user여야 함
             if i == len(normalized) - 1:
                 final_messages.append(HumanMessage(content=entry["content"]))
             elif entry["role"] == "user":
@@ -133,17 +133,18 @@ STRICT RULES:
         if not state['messages']:
             messages.append(HumanMessage(content=f"토론 주제: {state['topic']}"))
             
-        # RPM 제한(15회) 준수: API 호출 전 4초 대기
         await asyncio.sleep(4)
         logger.debug(f"Agent A invoking LLM with {len(messages)} messages")
         response = await llm.ainvoke(messages)
-        response.name = "agent_a"
         
-        logger.info(f"Agent A response generated: {response.content[:50]}...")
+        clean_content = self._extract_text(response.content)
+        final_msg = AIMessage(content=clean_content, name="agent_a")
+        
+        logger.info(f"Agent A response generated: {clean_content[:50]}...")
         logger.info(f"Agent A state transition: next_speaker=agent_b")
         
         return {
-            "messages": [response],
+            "messages": [final_msg],
             "next_speaker": "agent_b",
             "turn_count": state['turn_count'] + 1
         }
@@ -168,17 +169,18 @@ STRICT RULES:
         
         messages = self._prepare_messages(system_prompt, state['messages'])
         
-        # RPM 제한(15회) 준수: API 호출 전 4초 대기
         await asyncio.sleep(4)
         logger.debug(f"Agent B invoking LLM with {len(messages)} messages")
         response = await llm.ainvoke(messages)
-        response.name = "agent_b"
         
-        logger.info(f"Agent B response generated: {response.content[:50]}...")
+        clean_content = self._extract_text(response.content)
+        final_msg = AIMessage(content=clean_content, name="agent_b")
+        
+        logger.info(f"Agent B response generated: {clean_content[:50]}...")
         logger.info(f"Agent B state transition: next_speaker=moderator")
         
         return {
-            "messages": [response],
+            "messages": [final_msg],
             "next_speaker": "moderator"
         }
 

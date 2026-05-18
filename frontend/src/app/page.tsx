@@ -34,10 +34,10 @@ export default function AICouncilApp() {
   
   const [businessModel, setBusinessModel] = useState('gemma-4-31b-it');
   const [techModel, setTechModel] = useState('gemma-4-31b-it');
-  const [businessName, setBusinessName] = useState('재복');
-  const [businessInstruction, setBusinessInstruction] = useState('당신은 재복. 당신은 남자친구입니다. 여자친구인 지영과 저녁 메뉴에 대해 토론하며 무조건 비즈니스 전략적인 태도로 논리적으로 자신의 메뉴를 방어하고 상대방의 논리적 허점을 공격하세요. 2~3문장으로 간결하게 답변하세요. 한국어로만 답변하세요.');
-  const [techName, setTechName] = useState('기술자 B');
-  const [techInstruction, setTechInstruction] = useState('당신은 기술적 실현 가능성과 리스크를 분석하는 비판자입니다.');
+  const [businessName, setBusinessName] = useState('');
+  const [businessInstruction, setBusinessInstruction] = useState('');
+  const [techName, setTechName] = useState('');
+  const [techInstruction, setTechInstruction] = useState('');
   
   const [status, setStatus] = useState<string | null>(null);
   const [activeNode, setActiveNode] = useState<string | null>(null);
@@ -69,10 +69,10 @@ export default function AICouncilApp() {
           topic,
           business_model: businessModel,
           tech_model: techModel,
-          business_name: businessName,
-          business_instruction: businessInstruction,
-          tech_name: techName,
-          tech_instruction: techInstruction
+          business_name: businessName.trim() || '사업총괄 CBO',
+          business_instruction: businessInstruction.trim() || '당신은 제안된 안건의 시장성, 매출 기회, 고객 가치 관점에서 방어하고, 기술적 제약에 얽매이지 않는 공격적인 확장 전략을 2~3문장으로 간결하고 논리적으로 제시하세요. 한국어로만 답변하세요.',
+          tech_name: techName.trim() || '기술총괄 CTO',
+          tech_instruction: techInstruction.trim() || '당신은 기술적 실현 가능성, 시스템 안정성 및 보안 리스크를 냉철하게 분석하는 기술총괄 리더입니다. 상대방 제안의 아키텍처적 한계, 유지보수 비용, 잠재적 리스크를 지적하고 현실적인 대안을 2~3문장으로 간결하고 논리적으로 제시하세요. 한국어로만 답변하세요.'
         }),
       });
 
@@ -109,7 +109,7 @@ export default function AICouncilApp() {
                       { 
                         id: targetId, 
                         role: data.node, 
-                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName), 
+                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')), 
                         content: data.content,
                         isStreaming: true,
                         isThinking: false,
@@ -150,7 +150,7 @@ export default function AICouncilApp() {
                       {
                         id: targetId,
                         role: data.node as any,
-                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName),
+                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')),
                         content: data.content,
                         isStreaming: false,
                         isThinking: false,
@@ -203,6 +203,7 @@ export default function AICouncilApp() {
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Name</label>
                 <input 
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
+                  placeholder="예: 사업총괄 CBO"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                 />
@@ -211,6 +212,7 @@ export default function AICouncilApp() {
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Instruction</label>
                 <textarea 
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs outline-none min-h-[60px]"
+                  placeholder="예: 제안된 안건의 수익성과 시장성 관점에서 방어하고 확장 전략을 제시하세요."
                   value={businessInstruction}
                   onChange={(e) => setBusinessInstruction(e.target.value)}
                 />
@@ -237,6 +239,7 @@ export default function AICouncilApp() {
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Name</label>
                 <input 
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
+                  placeholder="예: 기술총괄 CTO"
                   value={techName}
                   onChange={(e) => setTechName(e.target.value)}
                 />
@@ -245,6 +248,7 @@ export default function AICouncilApp() {
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Instruction</label>
                 <textarea 
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs outline-none min-h-[60px]"
+                  placeholder="예: 기술적 실현 가능성과 시스템 안정성, 리스크를 냉철하게 비판하세요."
                   value={techInstruction}
                   onChange={(e) => setTechInstruction(e.target.value)}
                 />
