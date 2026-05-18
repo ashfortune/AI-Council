@@ -240,7 +240,7 @@ export default function AICouncilApp() {
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-3">
             <Sparkles className="text-violet-500" size={28} />
-            <h2 className="text-2xl font-black tracking-tighter">AI Council V2</h2>
+            <h2 className="text-2xl font-black tracking-tighter">AI Council</h2>
           </div>
           <button
             type="button"
