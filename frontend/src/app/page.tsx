@@ -32,17 +32,18 @@ export default function AICouncilApp() {
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStarted, setIsStarted] = useState(false);
-  
+
   const [businessModel, setBusinessModel] = useState('gemini-3.1-flash-lite');
   const [techModel, setTechModel] = useState('gemini-3.1-flash-lite');
   const [businessName, setBusinessName] = useState('');
   const [businessInstruction, setBusinessInstruction] = useState('');
   const [techName, setTechName] = useState('');
   const [techInstruction, setTechInstruction] = useState('');
-  
+
   const [status, setStatus] = useState<string | null>(null);
   const [activeNode, setActiveNode] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,9 +53,22 @@ export default function AICouncilApp() {
     scrollToBottom();
   }, [messages, status, activeNode]);
 
+  const handleReset = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setInput('');
+    setMessages([]);
+    setIsStarted(false);
+    setIsLoading(false);
+    setStatus(null);
+    setActiveNode(null);
+  };
+
   const handleDebate = async () => {
     if (!input.trim() || isLoading) return;
-    
+
     const topic = input;
     setInput('');
     setIsLoading(true);
@@ -62,11 +76,17 @@ export default function AICouncilApp() {
     setMessages([]);
     setStatus('토론 준비 중...');
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch('http://localhost:8000/api/v1/debate/run/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        signal: abortControllerRef.current.signal,
+        body: JSON.stringify({
           topic,
           business_model: businessModel,
           tech_model: techModel,
@@ -78,7 +98,7 @@ export default function AICouncilApp() {
       });
 
       if (!response.ok) throw new Error('서버 연결 실패');
-      
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -86,15 +106,15 @@ export default function AICouncilApp() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
+
           const chunkStr = decoder.decode(value);
           const lines = chunkStr.split('\n');
-          
+
           for (const line of lines) {
             if (!line.trim()) continue;
             try {
               const data = JSON.parse(line);
-              
+
               if (data.type === 'status') {
                 setStatus(data.content);
                 setActiveNode(data.node);
@@ -123,14 +143,14 @@ export default function AICouncilApp() {
                 setMessages(prev => {
                   const targetId = `turn-${data.turn}-${data.node}`;
                   const targetIdx = prev.findLastIndex(m => m.id === targetId);
-                  
+
                   if (targetIdx === -1) {
                     return [
                       ...prev,
-                      { 
-                        id: targetId, 
-                        role: data.node, 
-                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')), 
+                      {
+                        id: targetId,
+                        role: data.node,
+                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')),
                         content: data.content,
                         isStreaming: true,
                         isThinking: false,
@@ -151,13 +171,13 @@ export default function AICouncilApp() {
                 setMessages(prev => {
                   const targetId = `turn-${data.turn}-${data.node}`;
                   const targetIdx = prev.findLastIndex(m => m.id === targetId);
-                  
+
                   // 모든 메시지의 스트리밍 상태 종료
                   const baseMessages = prev.map((m: Message) => ({ ...m, isStreaming: false, isThinking: false }));
 
                   if (targetIdx !== -1) {
                     const newMessages = [...baseMessages];
-                    newMessages[targetIdx] = { 
+                    newMessages[targetIdx] = {
                       ...newMessages[targetIdx],
                       content: data.content,
                       isStreaming: false,
@@ -187,7 +207,8 @@ export default function AICouncilApp() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') return;
       alert('오류 발생: ' + error);
     } finally {
       setIsLoading(false);
@@ -203,16 +224,16 @@ export default function AICouncilApp() {
           <Sparkles className="text-violet-500" size={28} />
           <h2 className="text-2xl font-black tracking-tighter">AI Council V2</h2>
         </div>
-        
+
         <div className="space-y-6">
           <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
             <h3 className="text-sm font-bold text-white/40 mb-4 flex items-center gap-2">
-              <Settings size={14} /> Agent A (Proposer)
+              <Settings size={14} /> Agent A
             </h3>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Model</label>
-                <select 
+                <select
                   className="w-full bg-[#0f172a] border border-white/10 rounded-lg p-2 text-sm outline-none"
                   value={businessModel}
                   onChange={(e) => setBusinessModel(e.target.value)}
@@ -222,7 +243,7 @@ export default function AICouncilApp() {
               </div>
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Name</label>
-                <input 
+                <input
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
                   placeholder="예: 사업총괄 CBO"
                   value={businessName}
@@ -231,7 +252,7 @@ export default function AICouncilApp() {
               </div>
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Instruction</label>
-                <textarea 
+                <textarea
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs outline-none min-h-[60px]"
                   placeholder="예: 제안된 안건의 수익성과 시장성 관점에서 방어하고 확장 전략을 제시하세요."
                   value={businessInstruction}
@@ -243,12 +264,12 @@ export default function AICouncilApp() {
 
           <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
             <h3 className="text-sm font-bold text-white/40 mb-4 flex items-center gap-2">
-              <Settings size={14} /> Agent B (Critic)
+              <Settings size={14} /> Agent B
             </h3>
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Model</label>
-                <select 
+                <select
                   className="w-full bg-[#0f172a] border border-white/10 rounded-lg p-2 text-sm outline-none"
                   value={techModel}
                   onChange={(e) => setTechModel(e.target.value)}
@@ -258,7 +279,7 @@ export default function AICouncilApp() {
               </div>
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Name</label>
-                <input 
+                <input
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
                   placeholder="예: 기술총괄 CTO"
                   value={techName}
@@ -267,7 +288,7 @@ export default function AICouncilApp() {
               </div>
               <div>
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Instruction</label>
-                <textarea 
+                <textarea
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs outline-none min-h-[60px]"
                   placeholder="예: 기술적 실현 가능성과 시스템 안정성, 리스크를 냉철하게 비판하세요."
                   value={techInstruction}
@@ -282,7 +303,7 @@ export default function AICouncilApp() {
       <div className="flex-1 flex flex-col relative">
         <header className="px-10 py-6 border-b border-white/10 flex justify-between items-center backdrop-blur-md z-10">
           <div>
-            <h1 className="text-xl font-bold">Tiki-Taka Debate Board</h1>
+            <h1 className="text-xl font-bold">Debate Board</h1>
             <p className="text-sm text-white/40">{status || '토론 주제를 입력하여 대화를 시작하세요.'}</p>
           </div>
           <div className="px-3 py-1 bg-violet-600 rounded-full text-[10px] font-black uppercase tracking-widest">
@@ -299,27 +320,24 @@ export default function AICouncilApp() {
           )}
 
           {messages.map((msg) => (
-            <div 
-              key={msg.id} 
-              className={`flex flex-col ${
-                msg.role === 'summarize' 
-                  ? 'items-center' 
-                  : (msg.role === 'agent_a' ? 'items-start' : 'items-end')
-              } animate-fade-in mb-6`}
+            <div
+              key={msg.id}
+              className={`flex flex-col ${msg.role === 'summarize'
+                ? 'items-center'
+                : (msg.role === 'agent_a' ? 'items-start' : 'items-end')
+                } animate-fade-in mb-6`}
             >
               <div className="flex flex-col max-w-[80%]">
-                <span className={`text-[11px] font-medium mb-1.5 px-1 opacity-50 ${
-                  msg.role === 'agent_b' ? 'text-right' : ''
-                }`}>
+                <span className={`text-[11px] font-medium mb-1.5 px-1 opacity-50 ${msg.role === 'agent_b' ? 'text-right' : ''
+                  }`}>
                   {msg.name}
                 </span>
-                <div className={`relative px-4 py-3 rounded-2xl shadow-lg transition-all duration-300 ${
-                  msg.role === 'summarize'
-                    ? 'bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/30 text-amber-100 text-center backdrop-blur-md'
-                    : (msg.role === 'agent_a' 
-                        ? 'bg-[#1e293b] border border-white/10 text-white rounded-tl-none' 
-                        : 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/20')
-                }`}>
+                <div className={`relative px-4 py-3 rounded-2xl shadow-lg transition-all duration-300 ${msg.role === 'summarize'
+                  ? 'bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/30 text-amber-100 text-center backdrop-blur-md'
+                  : (msg.role === 'agent_a'
+                    ? 'bg-[#1e293b] border border-white/10 text-white rounded-tl-none'
+                    : 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/20')
+                  }`}>
                   {msg.isThinking ? (
                     <div className="flex items-center gap-3">
                       <TypingDots />
@@ -340,21 +358,34 @@ export default function AICouncilApp() {
         {/* Input Area */}
         <div className="p-10 pt-0">
           <div className="max-w-4xl mx-auto relative group">
-            <input 
-              className="w-full bg-[#1e293b]/80 backdrop-blur-2xl border border-white/10 rounded-3xl py-5 px-8 pr-20 outline-none focus:border-violet-500/50 transition-all shadow-2xl"
+            <input
+              className="w-full bg-[#1e293b]/80 backdrop-blur-2xl border border-white/10 rounded-3xl py-5 px-8 pr-32 outline-none focus:border-violet-500/50 transition-all shadow-2xl"
               placeholder="토론할 주제를 입력하세요..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleDebate()}
               disabled={isLoading}
             />
-            <button 
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 bg-violet-500 rounded-2xl flex items-center justify-center hover:bg-violet-400 transition-colors disabled:opacity-50"
-              onClick={handleDebate}
-              disabled={isLoading || !input.trim()}
-            >
-              {isLoading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
-            </button>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <button
+                type="button"
+                title="초기화"
+                className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-colors text-white/70 hover:text-white disabled:opacity-50 shadow-md"
+                onClick={handleReset}
+                disabled={!input && !isStarted && !isLoading}
+              >
+                <RotateCcw size={20} className={isLoading ? "animate-spin" : ""} />
+              </button>
+              <button
+                type="button"
+                title="전송"
+                className="w-12 h-12 bg-violet-500 rounded-2xl flex items-center justify-center hover:bg-violet-400 transition-colors disabled:opacity-50 shadow-md"
+                onClick={handleDebate}
+                disabled={isLoading || !input.trim()}
+              >
+                {isLoading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
+              </button>
+            </div>
           </div>
         </div>
       </div>
