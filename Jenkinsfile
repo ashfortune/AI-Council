@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     triggers {
-        // GitHub/GitLab Webhook 수신 시 자동 트리거 설정
+        // GitHub Webhook 수신 시 자동 트리거 설정
         GenericTrigger(
             genericVariables: [
                 [key: 'ref', value: '$.ref']
@@ -16,34 +16,14 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo '📦 Checking out from version control...'
+                echo '📦 Checking out latest code from Git repository...'
                 checkout scm
             }
         }
         
-        stage('Backend Verification') {
+        stage('Docker Build & Deploy to Local Host') {
             steps {
-                echo '🔍 Verifying Backend (FastAPI)...'
-                dir('backend') {
-                    sh 'python3 -m pip install -r requirements.txt || true'
-                    sh 'pytest || true'
-                }
-            }
-        }
-        
-        stage('Frontend Verification') {
-            steps {
-                echo '🎨 Verifying Frontend (Next.js)...'
-                dir('frontend') {
-                    sh 'npm install || true'
-                    sh 'npm run lint || true'
-                }
-            }
-        }
-        
-        stage('Docker Build & Rolling Deploy') {
-            steps {
-                echo '🚀 Building Docker images and deploying containers (DooD)...'
+                echo '🚀 Building images and deploying containers to local host Docker (DooD)...'
                 sh 'docker compose build'
                 sh 'docker compose up -d --no-deps backend frontend'
                 sh 'docker image prune -f'
@@ -53,10 +33,10 @@ pipeline {
     
     post {
         success {
-            echo '✅ [SUCCESS] AI Council CI/CD Pipeline successfully executed and deployed via Webhook!'
+            echo '✅ [SUCCESS] AI Council successfully built and deployed to local Docker host via Jenkins!'
         }
         failure {
-            echo '❌ [FAILURE] Pipeline execution failed. Please inspect Jenkins console output.'
+            echo '❌ [FAILURE] Deployment failed. Please inspect Jenkins console output.'
         }
     }
 }

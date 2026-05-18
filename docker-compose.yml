@@ -50,7 +50,7 @@ services:
       - aicouncil-network
 
   jenkins:
-    image: jenkins/jenkins:lts-jdk17
+    build: ./jenkins
     container_name: aicouncil-jenkins
     user: root
     ports:
@@ -59,8 +59,6 @@ services:
     volumes:
       - aicouncil-jenkins-data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker
-      - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose
     networks:
       - aicouncil-network
 
