@@ -40,7 +40,7 @@ class DebateService:
                 temperature=temperature,
                 max_retries=2,
                 timeout=30,
-                streaming=True
+                streaming=False
             )
         elif ":" in model_name or "gemma" in model_name.lower():
             # Ollama
@@ -77,21 +77,25 @@ class DebateService:
             return res if res else str(content).strip()
         return str(content).strip()
 
-    def _format_debate_prompt(self, system_prompt: str, state_messages: List[BaseMessage], current_node: str, personas: dict = None) -> List[BaseMessage]:
-        """과거 토론 히스토리를 하나의 단일 HumanMessage 컨텍스트로 결합하여 Gemini API 500 에러 원천 방지"""
-        final_messages = [SystemMessage(content=system_prompt)]
-        
+    def _format_debate_prompt(self, system_prompt: str, state_messages: List[BaseMessage], personas: dict = None) -> List[BaseMessage]:
+        """과거 토론 히스토리와 지침을 하나의 단일 HumanMessage 컨텍스트로 결합하여 Gemini API 500 에러 원천 방지"""
+        personas = personas or {}
+        business_name = personas.get('business', {}).get('name') or "Agent A"
+        tech_name = personas.get('tech', {}).get('name') or "Agent B"
+
         if not state_messages:
-            return final_messages
+            combined_prompt = f"""{system_prompt}
+
+=========================================
+
+[토론 시작]:
+오늘의 토론 안건에 대해 당신의 역할에 입각하여 첫 제안과 의견을 말씀해주세요. 한국어로만 발언해 주세요."""
+            return [HumanMessage(content=combined_prompt)]
 
         # 슬라이딩 윈도우: 최근 6개의 턴만 유지 (에코 루프 방지 및 Rate Limit 경감)
         recent_messages = state_messages[-6:]
         
         history_lines = []
-        personas = personas or {}
-        business_name = personas.get('business', {}).get('name') or "Agent A"
-        tech_name = personas.get('tech', {}).get('name') or "Agent B"
-        
         for m in recent_messages:
             content = self._extract_text(m.content)
             if not content:
@@ -104,15 +108,18 @@ class DebateService:
             
         history_text = "\n\n".join(history_lines)
         
-        user_prompt = f"""[이전 토론 기록]:
+        combined_prompt = f"""{system_prompt}
+
+=========================================
+
+[이전 토론 기록]:
 {history_text}
 
----
+=========================================
 
 위 토론 기록을 면밀히 검토하고, 상대방의 직전 발언에 논리적으로 반박하거나 동의하면서 당신의 역할 지침에 부합하는 다음 발언을 2~3문장으로 간결하게 제시하세요. 한국어로만 발언해 주세요."""
 
-        final_messages.append(HumanMessage(content=user_prompt))
-        return final_messages
+        return [HumanMessage(content=combined_prompt)]
 
     async def agent_a_node(self, state: DebateState):
         persona = state['personas'].get('business', {})
@@ -144,13 +151,7 @@ STRICT RULES:
 3. 주어진 안건({state['topic']}) 및 자신의 역할({name})에 완벽히 몰입하여 상대방의 의견에 논리적으로 대응하세요.
 4. 절대 이전 주장을 그대로 앵무새처럼 반복하지 말고, 상대방의 직전 발언을 직접 언급하며 새로운 논거나 절충안을 제시하세요."""
         
-        if not state['messages']:
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=f"오늘의 토론 안건: {state['topic']}\n이에 대한 제안과 의견을 말씀해주세요.")
-            ]
-        else:
-            messages = self._format_debate_prompt(system_prompt, state['messages'], current_node="agent_a", personas=state['personas'])
+        messages = self._format_debate_prompt(system_prompt, state['messages'], personas=state['personas'])
             
         await asyncio.sleep(4)
         logger.debug(f"Agent A invoking LLM with {len(messages)} messages")
@@ -198,7 +199,7 @@ STRICT RULES:
 3. 주어진 안건({state['topic']}) 및 자신의 역할({name})에 완벽히 몰입하여 상대방의 의견에 논리적으로 대응하세요.
 4. 절대 이전 주장을 그대로 앵무새처럼 반복하지 말고, 상대방의 직전 발언을 직접 언급하며 새로운 논거나 절충안을 제시하세요."""
         
-        messages = self._format_debate_prompt(system_prompt, state['messages'], current_node="agent_b", personas=state['personas'])
+        messages = self._format_debate_prompt(system_prompt, state['messages'], personas=state['personas'])
         
         await asyncio.sleep(4)
         logger.debug(f"Agent B invoking LLM with {len(messages)} messages")
