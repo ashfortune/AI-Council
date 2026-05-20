@@ -78,7 +78,7 @@ class DebateService:
         return str(content).strip()
 
     def _format_debate_prompt(self, system_prompt: str, state_messages: List[BaseMessage], current_node: str, personas: dict = None) -> List[BaseMessage]:
-        """발화자 식별 기반 역할 분리 및 Gemini User-AI 교차 규칙 정규화"""
+        """과거 토론 히스토리를 하나의 단일 HumanMessage 컨텍스트로 결합하여 Gemini API 500 에러 원천 방지"""
         final_messages = [SystemMessage(content=system_prompt)]
         
         if not state_messages:
@@ -87,41 +87,31 @@ class DebateService:
         # 슬라이딩 윈도우: 최근 6개의 턴만 유지 (에코 루프 방지 및 Rate Limit 경감)
         recent_messages = state_messages[-6:]
         
-        normalized = []
+        history_lines = []
+        personas = personas or {}
+        business_name = personas.get('business', {}).get('name') or "Agent A"
+        tech_name = personas.get('tech', {}).get('name') or "Agent B"
+        
         for m in recent_messages:
             content = self._extract_text(m.content)
-            if not content: continue
+            if not content:
+                continue
             
             speaker_node = getattr(m, 'name', None) or "unknown"
-            # 현재 노드와 메시지 작성자가 같으면 본인의 과거 발화(assistant), 다르면 상대방의 의견(user)
-            role = "assistant" if speaker_node == current_node else "user"
-            
-            # 발화자 명시 포맷팅으로 컨텍스트 혼동 차단
-            personas = personas or {}
-            business_name = personas.get('business', {}).get('name') or "Agent A"
-            tech_name = personas.get('tech', {}).get('name') or "Agent B"
             display_name = business_name if speaker_node == "agent_a" else (tech_name if speaker_node == "agent_b" else "참여자")
-            formatted_content = f"[{display_name}의 의견]:\n{content}" if role == "user" else content
             
-            if normalized and normalized[-1]["role"] == role:
-                normalized[-1]["content"] += f"\n\n{formatted_content}"
-            else:
-                normalized.append({"role": role, "content": formatted_content})
+            history_lines.append(f"[{display_name}]: {content}")
+            
+        history_text = "\n\n".join(history_lines)
+        
+        user_prompt = f"""[이전 토론 기록]:
+{history_text}
 
-        # Gemini API 규칙 보장: 첫 번째 메시지는 user로 시작
-        if normalized and normalized[0]["role"] == "assistant":
-            normalized[0]["role"] = "user"
+---
 
-        # 마지막 메시지는 무조건 user로 끝나야 함 (상대방의 최근 의견에 대한 반박 구조)
-        if normalized and normalized[-1]["role"] == "assistant":
-            normalized[-1]["role"] = "user"
+위 토론 기록을 면밀히 검토하고, 상대방의 직전 발언에 논리적으로 반박하거나 동의하면서 당신의 역할 지침에 부합하는 다음 발언을 2~3문장으로 간결하게 제시하세요. 한국어로만 발언해 주세요."""
 
-        for entry in normalized:
-            if entry["role"] == "user":
-                final_messages.append(HumanMessage(content=entry["content"]))
-            else:
-                final_messages.append(AIMessage(content=entry["content"]))
-                
+        final_messages.append(HumanMessage(content=user_prompt))
         return final_messages
 
     async def agent_a_node(self, state: DebateState):
