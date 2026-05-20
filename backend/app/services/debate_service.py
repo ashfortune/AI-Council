@@ -77,7 +77,7 @@ class DebateService:
             return res if res else str(content).strip()
         return str(content).strip()
 
-    def _format_debate_prompt(self, system_prompt: str, state_messages: List[BaseMessage], current_node: str) -> List[BaseMessage]:
+    def _format_debate_prompt(self, system_prompt: str, state_messages: List[BaseMessage], current_node: str, personas: dict = None) -> List[BaseMessage]:
         """발화자 식별 기반 역할 분리 및 Gemini User-AI 교차 규칙 정규화"""
         final_messages = [SystemMessage(content=system_prompt)]
         
@@ -97,7 +97,10 @@ class DebateService:
             role = "assistant" if speaker_node == current_node else "user"
             
             # 발화자 명시 포맷팅으로 컨텍스트 혼동 차단
-            display_name = "사업총괄 CBO" if speaker_node == "agent_a" else ("기술총괄 CTO" if speaker_node == "agent_b" else "참여자")
+            personas = personas or {}
+            business_name = personas.get('business', {}).get('name') or "Agent A"
+            tech_name = personas.get('tech', {}).get('name') or "Agent B"
+            display_name = business_name if speaker_node == "agent_a" else (tech_name if speaker_node == "agent_b" else "참여자")
             formatted_content = f"[{display_name}의 의견]:\n{content}" if role == "user" else content
             
             if normalized and normalized[-1]["role"] == role:
@@ -123,7 +126,7 @@ class DebateService:
 
     async def agent_a_node(self, state: DebateState):
         persona = state['personas'].get('business', {})
-        name = persona.get('name') or '사업총괄 CBO'
+        name = persona.get('name') or 'Agent A'
         instruction = persona.get('instruction') or '당신은 기업의 비즈니스 전략 및 수익성을 총괄하는 최고비즈니스책임자입니다.'
         
         model = state['models'].get('business', 'gemini-2.0-flash') 
@@ -157,7 +160,7 @@ STRICT RULES:
                 HumanMessage(content=f"오늘의 토론 안건: {state['topic']}\n이에 대한 제안과 의견을 말씀해주세요.")
             ]
         else:
-            messages = self._format_debate_prompt(system_prompt, state['messages'], current_node="agent_a")
+            messages = self._format_debate_prompt(system_prompt, state['messages'], current_node="agent_a", personas=state['personas'])
             
         await asyncio.sleep(4)
         logger.debug(f"Agent A invoking LLM with {len(messages)} messages")
@@ -177,7 +180,7 @@ STRICT RULES:
 
     async def agent_b_node(self, state: DebateState):
         persona = state['personas'].get('tech', {})
-        name = persona.get('name') or '기술총괄 CTO'
+        name = persona.get('name') or 'Agent B'
         instruction = persona.get('instruction') or '당신은 기업의 아키텍처, 시스템 안정성 및 기술적 타당성을 총괄하는 최고기술책임자입니다.'
         
         model = state['models'].get('tech', 'gemini-2.0-flash')
@@ -205,7 +208,7 @@ STRICT RULES:
 3. 주어진 안건({state['topic']}) 및 자신의 역할({name})에 완벽히 몰입하여 상대방의 의견에 논리적으로 대응하세요.
 4. 절대 이전 주장을 그대로 앵무새처럼 반복하지 말고, 상대방의 직전 발언을 직접 언급하며 새로운 논거나 절충안을 제시하세요."""
         
-        messages = self._format_debate_prompt(system_prompt, state['messages'], current_node="agent_b")
+        messages = self._format_debate_prompt(system_prompt, state['messages'], current_node="agent_b", personas=state['personas'])
         
         await asyncio.sleep(4)
         logger.debug(f"Agent B invoking LLM with {len(messages)} messages")

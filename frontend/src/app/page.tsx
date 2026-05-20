@@ -84,7 +84,29 @@ export default function AICouncilApp() {
   };
 
   const handleDebate = async () => {
-    if (!input.trim() || isLoading) return;
+    if (isLoading) return;
+
+    if (!businessName.trim()) {
+      alert('Agent A의 이름을 입력해주세요.');
+      return;
+    }
+    if (!businessInstruction.trim()) {
+      alert('Agent A의 지침(Instruction)을 입력해주세요.');
+      return;
+    }
+    if (!techName.trim()) {
+      alert('Agent B의 이름을 입력해주세요.');
+      return;
+    }
+    if (!techInstruction.trim()) {
+      alert('Agent B의 지침(Instruction)을 입력해주세요.');
+      return;
+    }
+
+    if (!input.trim()) {
+      alert('토론할 주제를 입력해주세요.');
+      return;
+    }
 
     const topic = input;
     setInput('');
@@ -107,10 +129,10 @@ export default function AICouncilApp() {
           topic,
           business_model: businessModel,
           tech_model: techModel,
-          business_name: businessName.trim() || '사업총괄 CBO',
-          business_instruction: businessInstruction.trim() || '당신은 제안된 안건의 시장성, 매출 기회, 고객 가치 관점에서 방어하고, 기술적 제약에 얽매이지 않는 공격적인 확장 전략을 2~3문장으로 간결하고 논리적으로 제시하세요. 한국어로만 답변하세요.',
-          tech_name: techName.trim() || '기술총괄 CTO',
-          tech_instruction: techInstruction.trim() || '당신은 기술적 실현 가능성, 시스템 안정성 및 보안 리스크를 냉철하게 분석하는 기술총괄 리더입니다. 상대방 제안의 아키텍처적 한계, 유지보수 비용, 잠재적 리스크를 지적하고 현실적인 대안을 2~3문장으로 간결하고 논리적으로 제시하세요. 한국어로만 답변하세요.'
+          business_name: businessName.trim(),
+          business_instruction: businessInstruction.trim(),
+          tech_name: techName.trim(),
+          tech_instruction: techInstruction.trim()
         }),
       });
 
@@ -145,7 +167,7 @@ export default function AICouncilApp() {
                         {
                           id: targetId,
                           role: data.node as any,
-                          name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')),
+                          name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName),
                           content: '',
                           isStreaming: true,
                           isThinking: true,
@@ -167,7 +189,7 @@ export default function AICouncilApp() {
                       {
                         id: targetId,
                         role: data.node,
-                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')),
+                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName),
                         content: data.content,
                         isStreaming: true,
                         isThinking: false,
@@ -208,7 +230,7 @@ export default function AICouncilApp() {
                       {
                         id: targetId,
                         role: data.node as any,
-                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? (businessName || '사업총괄 CBO') : (techName || '기술총괄 CTO')),
+                        name: data.node === 'summarize' ? '의장(최종 결론)' : (data.node === 'agent_a' ? businessName : techName),
                         content: data.content,
                         isStreaming: false,
                         isThinking: false,
@@ -283,7 +305,7 @@ export default function AICouncilApp() {
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Name</label>
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
-                  placeholder="예: 사업총괄 CBO"
+                  placeholder="이름을 입력하세요 (예: 사업총괄)"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                 />
@@ -329,7 +351,7 @@ export default function AICouncilApp() {
                 <label className="text-[10px] uppercase font-bold text-white/40 mb-1 block">Name</label>
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none"
-                  placeholder="예: 기술총괄 CTO"
+                  placeholder="이름을 입력하세요 (예: 기술총괄)"
                   value={techName}
                   onChange={(e) => setTechName(e.target.value)}
                 />
@@ -429,7 +451,7 @@ export default function AICouncilApp() {
                 title="전송"
                 className="w-12 h-12 bg-violet-500 rounded-2xl flex items-center justify-center hover:bg-violet-400 transition-colors disabled:opacity-50 shadow-md"
                 onClick={handleDebate}
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading}
               >
                 {isLoading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
               </button>
